@@ -1,5 +1,47 @@
 /* Shared responsive layout */
 @media (max-width: 1100px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+
+    .sidebar.is-open {
+        transform: translateX(0);
+        box-shadow: 20px 0 30px rgba(0, 0, 0, 0.08);
+    }
+
+    .app-content {
+        margin-left: 0;
+    }
+
+    .mobile-menu-button {
+        display: inline-grid;
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 30;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.96);
+        color: var(--black);
+        box-shadow: var(--shadow);
+    }
+
+    .mobile-nav-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 15;
+        display: none;
+        border: 0;
+        background: rgba(18, 18, 18, 0.35);
+    }
+
+    .mobile-nav-backdrop.is-visible {
+        display: block;
+    }
+
     .services-section {
         grid-template-columns: 230px minmax(0, 1fr);
         gap: 18px;
@@ -57,6 +99,11 @@
 
 @media (max-width: 760px) {
     :root { --nav-width: 72px; }
+
+    .mobile-menu-button {
+        top: 12px;
+        left: 12px;
+    }
 
     .sidebar {
         width: var(--nav-width);

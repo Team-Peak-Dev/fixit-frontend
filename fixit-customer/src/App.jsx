@@ -58,10 +58,12 @@ function App() {
     const [activePage, setActivePage] = useState('home');
     const [jobs, setJobs] = useState(initialJobs);
     const [selectedJob, setSelectedJob] = useState(initialJobs[0]);
+    const [navOpen, setNavOpen] = useState(false);
 
     const navigate = (page, job = selectedJob) => {
         if (job) setSelectedJob(job);
         setActivePage(page);
+        setNavOpen(false);
     };
 
     const handleCancelJob = (job) => {
@@ -181,7 +183,22 @@ function App() {
 
     return (
         <div className="app-shell">
-            <Nav activePage={activePage} onNavigate={navigate} />
+            <button
+                type="button"
+                className={`mobile-menu-button${navOpen ? ' is-open' : ''}`}
+                onClick={() => setNavOpen((current) => !current)}
+                aria-label="Toggle navigation"
+                aria-expanded={navOpen}
+            >
+                <i aria-hidden="true" className="fa-solid fa-bars" />
+            </button>
+            <button
+                type="button"
+                className={`mobile-nav-backdrop${navOpen ? ' is-visible' : ''}`}
+                onClick={() => setNavOpen(false)}
+                aria-label="Close navigation"
+            />
+            <Nav activePage={activePage} onNavigate={navigate} isOpen={navOpen} onClose={() => setNavOpen(false)} />
             <div className="app-content">
                 <Suspense fallback={<div className="page-loading" role="status" aria-live="polite">Loading…</div>}>
                     {renderPage()}

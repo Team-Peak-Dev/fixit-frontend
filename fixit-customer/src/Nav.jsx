@@ -5,9 +5,9 @@ const navItems = [
     { id: 'account', label: 'Profile', icon: 'fa-solid fa-user' }
 ];
 
-function Nav({ activePage, onNavigate }) {
+function Nav({ activePage, onNavigate, isOpen = false, onClose = () => {} }) {
     return (
-        <nav className="sidebar" aria-label="Primary navigation">
+        <nav className={`sidebar${isOpen ? ' is-open' : ''}`} aria-label="Primary navigation">
             <div className="logo">
                 <div className="logo-icon">F</div>
                 <div className="logo-text">FixIt</div>
@@ -23,7 +23,12 @@ function Nav({ activePage, onNavigate }) {
                             key={item.id}
                             type="button"
                             className={`nav-item${isActive ? ' active' : ''}`}
-                            onClick={() => !disabled && onNavigate(item.id)}
+                            onClick={() => {
+                                if (!disabled) {
+                                    onNavigate(item.id);
+                                    onClose();
+                                }
+                            }}
                             disabled={disabled}
                             aria-current={isActive ? 'page' : undefined}
                             title={disabled ? `${item.label} is not implemented yet` : undefined}
@@ -35,7 +40,14 @@ function Nav({ activePage, onNavigate }) {
                 })}
             </div>
 
-            <button type="button" className="post-job-button" onClick={() => onNavigate('postJob')}>
+            <button
+                type="button"
+                className="post-job-button"
+                onClick={() => {
+                    onNavigate('postJob');
+                    onClose();
+                }}
+            >
                 <i aria-hidden="true" className="fa-solid fa-plus"></i>
                 <span>Post a Job</span>
             </button>

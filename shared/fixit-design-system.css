@@ -1,32 +1,47 @@
-/* FixIt shared visual foundation.
-   Role-specific screens remain independent; this file keeps their visual language aligned. */
+/* Use a system font stack so typography remains stable when external font CDNs are unavailable. */
+
+/* FixIt shared visual foundation, aligned with the supplied Stitch design system.
+   Role-specific screens remain independent while sharing the same tokens and interaction language. */
 :root {
   color-scheme: light;
-  --background: #f7f7f7;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --background: #f8f9ff;
   --surface: #ffffff;
-  --surface-soft: #f3f3f3;
-  --soft: #f3f3f3;
-  --black: #171717;
-  --text: #222222;
-  --muted: #6f6f6f;
-  --light-text: #707070;
-  --border: #e8e8e8;
-  --border-strong: #d6d6d6;
-  --focus: #315efb;
-  --success: #16794b;
-  --success-soft: #e8f6ee;
-  --warning: #9a5b00;
-  --warning-soft: #fff3d9;
-  --danger: #b42318;
-  --danger-soft: #fcebea;
+  --surface-soft: #eff4ff;
+  --surface-container: #e5eeff;
+  --surface-container-high: #dce9ff;
+  --surface-container-highest: #d3e4fe;
+  --soft: #eff4ff;
+  --black: #0b1c30;
+  --text: #0b1c30;
+  --muted: #526174;
+  --light-text: #64748b;
+  --border: #e2e8f0;
+  --border-strong: #bccac0;
+  --outline: #6d7a72;
+  --focus: #006948;
+  --primary: #006948;
+  --primary-hover: #00855d;
+  --primary-soft: #e8f7ef;
+  --primary-contrast: #ffffff;
+  --secondary: #575e70;
+  --tertiary: #825100;
+  --success: #006948;
+  --success-soft: #e8f7ef;
+  --warning: #825100;
+  --warning-soft: #fff3df;
+  --danger: #ba1a1a;
+  --danger-soft: #ffdad6;
   --info: #285ca8;
   --info-soft: #eaf2ff;
   --topbar-height: 72px;
   --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 18px;
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
-  --shadow-dialog: 0 24px 80px rgba(0, 0, 0, 0.22);
+  --radius: 8px;
+  --radius-lg: 16px;
+  --shadow: 0 1px 3px rgba(17, 24, 39, 0.05), 0 1px 2px rgba(17, 24, 39, 0.03);
+  --shadow-hover: 0 4px 6px -1px rgba(17, 24, 39, 0.07), 0 2px 4px -2px rgba(17, 24, 39, 0.05);
+  --shadow-dialog: 0 10px 15px -3px rgba(17, 24, 39, 0.08), 0 4px 6px -4px rgba(17, 24, 39, 0.04);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -43,7 +58,7 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
   font-synthesis: none;
@@ -56,15 +71,19 @@ button { color: inherit; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 a { color: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 3px solid var(--focus);
+  outline: 3px solid var(--primary);
   outline-offset: 3px;
 }
-h1, h2, h3 { color: var(--black); letter-spacing: -.025em; }
+h1, h2, h3, h4, .page-title, .page-heading h1 {
+  color: var(--black);
+  font-family: var(--font-display);
+  letter-spacing: -.025em;
+}
 small, .text-muted { color: var(--muted); }
 
 /* Shared desktop workspace geometry. Mobile navigation remains app-specific. */
 @media (min-width: 768px) {
-  :root { --nav-width: 248px; }
+  /* Each app owns its navigation width. Do not replace its responsive token globally. */
   .sidebar, .provider-sidebar, .admin-sidebar { width: var(--nav-width); }
   .app-content { margin-left: var(--nav-width); }
   .provider-main, .admin-main { margin-left: var(--nav-width); }
@@ -76,17 +95,30 @@ small, .text-muted { color: var(--muted); }
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
+.card:hover, .panel:hover, .metric-card:hover, .stat-card:hover {
+  box-shadow: var(--shadow-hover);
+}
 
-/* Consistent active navigation and primary action language. */
+/* Trust and action colours follow the Stitch emerald palette. */
 .provider-nav .nav-link[aria-current="page"],
 .admin-nav-link[aria-current="page"] {
-  background: var(--black);
+  background: var(--primary);
   color: #fff;
 }
 .provider-nav .nav-link[aria-current="page"]:hover,
-.admin-nav-link[aria-current="page"]:hover { background: #303030; color: #fff; }
-.btn-primary, .dark-button { background: var(--black); color: #fff; }
-.btn-primary:hover, .dark-button:hover { background: #303030; }
+.admin-nav-link[aria-current="page"]:hover {
+  background: var(--primary-hover);
+  color: #fff;
+}
+.btn-primary, .dark-button, .primary-button {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+.btn-primary:hover, .dark-button:hover, .primary-button:hover {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
 .btn-secondary, .outline-button {
   border-color: var(--border-strong);
   border-radius: var(--radius-sm);
@@ -94,3 +126,125 @@ small, .text-muted { color: var(--muted); }
   color: var(--text);
 }
 .btn-secondary:hover, .outline-button:hover { background: var(--surface-soft); }
+
+/* Shared route-level loading and motion system for all FixIt applications. */
+.fixit-page-loading {
+  display: flex;
+  min-height: 36vh;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  color: var(--muted);
+  font-size: .88rem;
+}
+.fixit-loading-spinner {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: fixit-spin .72s linear infinite;
+}
+.fixit-page-transition {
+  min-width: 0;
+  animation: fixit-page-enter .28s cubic-bezier(.2,.7,.2,1) both;
+}
+.fixit-page-transition > * {
+  animation: fixit-content-enter .36s cubic-bezier(.2,.7,.2,1) both;
+}
+.fixit-page-transition > *:nth-child(2) { animation-delay: 35ms; }
+.fixit-page-transition > *:nth-child(3) { animation-delay: 70ms; }
+.fixit-page-transition > *:nth-child(4) { animation-delay: 105ms; }
+.fixit-page-transition :is(button, a) {
+  transition: transform .16s ease, box-shadow .16s ease, background-color .16s ease, border-color .16s ease;
+}
+.fixit-page-transition :is(button, a):active:not(:disabled) { transform: scale(.985); }
+.fixit-page-transition :is(.card, .panel, .metric-card, .stat-card) {
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.fixit-page-transition :is(.card, .panel, .metric-card, .stat-card):hover {
+  border-color: var(--border-strong);
+}
+@keyframes fixit-spin { to { transform: rotate(360deg); } }
+@keyframes fixit-page-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fixit-content-enter {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fixit-page-transition,
+  .fixit-page-transition > *,
+  .fixit-loading-spinner,
+  .fixit-page-transition :is(button, a) {
+    animation: none !important;
+    transition: none !important;
+  }
+  .fixit-page-transition :is(button, a):active:not(:disabled) { transform: none; }
+}
+
+
+/* Shared overflow and intrinsic-sizing safeguards. These prevent long labels,
+   wide tables, and nested grids from pushing an application beyond its viewport. */
+:where(.app-shell, .provider-app, .admin-app, .app-content, .provider-main,
+  .admin-main, .provider-content, .admin-content, .page-surface,
+  .fixit-page-transition) {
+  min-width: 0;
+}
+:where(.provider-content, .admin-content) > *,
+:where(.provider-content, .admin-content) :is(.card, .panel, .metric-card, .stat-card) {
+  min-width: 0;
+}
+:where(.provider-content, .admin-content) :is(h1, h2, h3, p) {
+  overflow-wrap: anywhere;
+}
+:where(.provider-content, .admin-content) img,
+:where(.provider-content, .admin-content) svg,
+:where(.provider-content, .admin-content) video {
+  max-width: 100%;
+}
+@media (max-width: 1100px) and (min-width: 768px) {
+  .provider-topbar, .admin-topbar {
+    gap: 12px;
+    padding-inline: 20px;
+  }
+  .provider-content, .admin-content {
+    padding-inline: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within { scroll-behavior: auto; }
+}
+
+
+/* Shared async route states: real loading feedback and a recoverable chunk-load error. */
+.fixit-loading-state {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  width: min(100%, 560px);
+  min-height: 180px;
+  margin: clamp(24px, 6vh, 64px) auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+}
+.fixit-loading-state > div:nth-child(2) { display: grid; gap: 3px; }
+.fixit-loading-copy { color: var(--muted); font-size: .82rem; }
+.fixit-loading-skeleton { grid-column: 1 / -1; display: grid; gap: 9px; margin-top: 12px; }
+.fixit-loading-skeleton span { display: block; height: 11px; border-radius: 99px; background: var(--surface-soft); }
+.fixit-loading-skeleton span:nth-child(2) { width: 82%; }
+.fixit-loading-skeleton span:nth-child(3) { width: 61%; }
+.fixit-error-state {
+  display: grid; justify-items: start; gap: 10px; width: min(100%, 560px);
+  margin: clamp(24px, 6vh, 64px) auto; padding: 24px;
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
+}
+.fixit-error-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: var(--danger-soft); color: var(--danger); font-weight: 800; }
+.fixit-error-state h2 { margin: 0; font-size: 1.05rem; }
+.fixit-error-state p { margin: 0; color: var(--muted); font-size: .88rem; }
+.fixit-error-state button { min-height: 44px; margin-top: 5px; padding: 0 16px; border: 0; border-radius: var(--radius-sm); background: var(--primary); color: var(--primary-contrast); font-weight: 700; cursor: pointer; }
+.fixit-error-state button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }

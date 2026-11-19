@@ -1,13 +1,13 @@
-import { lazy, Suspense, useState } from 'react';
+import { useState } from 'react';
 import Nav from './Nav';
-import Home from './Home';
-const PostJob = lazy(() => import('./PostJob.jsx'));
-const MyJobs = lazy(() => import('./MyJobs.jsx'));
-const JobDetails = lazy(() => import('./JobDetails.jsx'));
-const Payment = lazy(() => import('./Payment.jsx'));
-const Review = lazy(() => import('./Review.jsx'));
-const Account = lazy(() => import('./Account.jsx'));
-const Messages = lazy(() => import('./Messages.jsx'));
+import { FixitAsyncBoundary } from './FixitAsyncBoundary.jsx';
+import Home from './Home.jsx';
+import PostJob from './PostJob.jsx';
+import MyJobs from './MyJobs.jsx';
+import JobDetails from './JobDetails.jsx';
+import Payment from './Payment.jsx';
+import Review from './Review.jsx';
+import Account from './Account.jsx';
 
 const initialJobs = [
     {
@@ -57,6 +57,7 @@ const initialJobs = [
 function App() {
     const [activePage, setActivePage] = useState('home');
     const [jobs, setJobs] = useState(initialJobs);
+    const [myJobsViewState, setMyJobsViewState] = useState({ search: '', statusFilter: 'ALL', categoryFilter: 'ALL', sortBy: 'recent' });
     const [selectedJob, setSelectedJob] = useState(initialJobs[0]);
 
     const navigate = (page, job = selectedJob) => {
@@ -101,6 +102,7 @@ function App() {
         };
 
         setJobs((current) => [newJob, ...current]);
+        setMyJobsViewState({ search: '', statusFilter: 'ALL', categoryFilter: 'ALL', sortBy: 'recent' });
         setSelectedJob(newJob);
         setActivePage('myJobs');
     };
@@ -113,16 +115,10 @@ function App() {
                 return (
                     <MyJobs
                         jobs={jobs}
+                        viewState={myJobsViewState}
+                        onViewStateChange={setMyJobsViewState}
                         onPostJob={() => navigate('postJob')}
                         onViewDetails={(job) => navigate('jobDetails', job)}
-                        onOpenMessages={(job) => navigate('messages', job)}
-                    />
-                );
-            case 'messages':
-                return (
-                    <Messages
-                        selectedJob={selectedJobFromState}
-                        onViewJob={() => navigate('jobDetails', selectedJobFromState)}
                     />
                 );
             case 'postJob':
@@ -138,7 +134,6 @@ function App() {
                         job={selectedJobFromState}
                         onBack={() => navigate('myJobs', selectedJobFromState)}
                         onPayment={() => navigate('payment', selectedJobFromState)}
-                        onMessages={() => navigate('messages', selectedJobFromState)}
                         onCancel={() => handleCancelJob(selectedJobFromState)}
                     />
                 );
@@ -183,9 +178,13 @@ function App() {
         <div className="app-shell">
             <Nav activePage={activePage} onNavigate={navigate} />
             <div className="app-content">
-                <Suspense fallback={<div className="page-loading" role="status" aria-live="polite">Loading…</div>}>
-                    {renderPage()}
-                </Suspense>
+                <FixitAsyncBoundary key={activePage}>
+                
+                    <div key={activePage} className="fixit-page-transition">
+                        {renderPage()}
+                    </div>
+                
+                </FixitAsyncBoundary>
             </div>
         </div>
     );

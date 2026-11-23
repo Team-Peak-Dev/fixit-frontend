@@ -1,194 +1,359 @@
-import { lazy, Suspense, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import './styles/pages/jobs.css';
+import './styles/pages/account.css';
+import './styles/pages/my-jobs.css';
 import Nav from './Nav';
-import Home from './Home';
-const PostJob = lazy(() => import('./PostJob.jsx'));
-const MyJobs = lazy(() => import('./MyJobs.jsx'));
-const JobDetails = lazy(() => import('./JobDetails.jsx'));
-const Payment = lazy(() => import('./Payment.jsx'));
-const Review = lazy(() => import('./Review.jsx'));
-const Account = lazy(() => import('./Account.jsx'));
-const Messages = lazy(() => import('./Messages.jsx'));
+import { FixitAsyncBoundary } from './FixitAsyncBoundary.jsx';
+import Home from './Home.jsx';
+import { providers } from './home/providers.js';
+import LandingPage from './LandingPage.jsx';
+import ProviderProfile from './ProviderProfile.jsx';
+import PostJob from './PostJob.jsx';
+import MyJobs from './MyJobs.jsx';
+import JobDetails from './JobDetails.jsx';
+import Payment from './Payment.jsx';
+import Review from './Review.jsx';
+import Account from './Account.jsx';
+import AuthGate from './AuthGate.jsx';
+import { customerApi } from './api/customer.js';
+import { extractJob, extractJobList, jobErrorMessage } from './api/customerJobs.js';
+import { demoCustomerJobs } from './demo/customerJobs.js';
 
-const initialJobs = [
-    {
-        id: 'JOB-09123',
-        icon: 'fa-solid fa-faucet',
-        category: 'PLUMBING',
-        status: 'IN PROGRESS',
-        title: 'Fixing Kitchen Sink Leak',
-        dateStr: 'Sat, 21 Feb 2026',
-        location: 'Victoria Island, Lagos',
-        priceLabel: 'AGREED PRICE',
-        priceValue: 12500,
-        priceSubtext: 'Escrow Secured',
-        providerName: 'Emeka Nwachukwu',
-        progressPercentage: 75,
-    },
-    {
-        id: 'JOB-09124',
-        icon: 'fa-solid fa-bolt',
-        category: 'ELECTRICAL',
-        status: 'AWAITING BIDS',
-        title: 'Circuit Breaker Tripping Frequently',
-        dateStr: 'Mon, 23 Feb 2026',
-        location: 'Ikeja, Lagos',
-        priceLabel: 'EST. BUDGET',
-        minBudget: 8000,
-        maxBudget: 15000,
-        priceValue: 8000,
-        bidNo: 3,
-        providerName: 'Tunde Bello',
-    },
-    {
-        id: 'JOB-09125',
-        icon: 'fa-solid fa-broom',
-        category: 'CLEANING',
-        status: 'COMPLETED',
-        title: 'Deep House Cleaning (3BR)',
-        dateStr: 'Wed, 10 Feb 2026',
-        location: 'Surulere, Lagos',
-        priceLabel: 'PAID AMOUNT',
-        priceValue: 25000,
-        providerName: 'Chioma Adeyemi',
-        providerRating: 5,
-    },
-];
+const PAGE_HASHES = {
+    home: 'home',
+    myJobs: 'my-jobs',
+    postJob: 'post-job',
+    jobDetails: 'job-details',
+    payment: 'payment',
+    review: 'review',
+    account: 'account',
+    notFound: 'not-found',
+};
+const HASH_PAGES = Object.fromEntries(Object.entries(PAGE_HASHES).map(([page, hash]) => [hash, page]));
 
-function App() {
-    const [activePage, setActivePage] = useState('home');
-    const [jobs, setJobs] = useState(initialJobs);
-    const [selectedJob, setSelectedJob] = useState(initialJobs[0]);
+const PAGE_LABELS = {
+    home: 'Marketplace',
+    myJobs: 'My Jobs',
+    postJob: 'Post a Job',
+    jobDetails: 'Job Details',
+    payment: 'Checkout',
+    review: 'Review',
+    account: 'My Account',
+    notFound: 'Page not found',
+};
 
-    const navigate = (page, job = selectedJob) => {
-        if (job) setSelectedJob(job);
-        setActivePage(page);
-    };
+function getHashPath() {
+    return window.location.hash.replace(/^#\/?/, '').split('?')[0];
+}
 
-    const handleCancelJob = (job) => {
-        const cancelledJob = { ...job, status: 'CANCELLED', progressPercentage: 0 };
-        setJobs((current) => {
-            const exists = current.some((item) => item.id === job.id);
-            return exists
-                ? current.map((item) => item.id === job.id ? cancelledJob : item)
-                : [cancelledJob, ...current];
-        });
-        setSelectedJob(cancelledJob);
-        setActivePage('myJobs');
-    };
+function getPageFromHash() {
+    const route = getHashPath();
+    return HASH_PAGES[route.split('/')[0]] || (route ? 'notFound' : 'home');
+}
 
-    const handleJobPosted = (job) => {
-        const newJob = {
-            id: `JOB-${Date.now().toString().slice(-5)}`,
-            icon: job.category === 'Electrical'
-                ? 'fa-solid fa-bolt'
-                : job.category === 'Cleaning'
-                    ? 'fa-solid fa-broom'
-                    : job.category === 'Carpentry'
-                        ? 'fa-solid fa-hammer'
-                        : job.category === 'Painting'
-                            ? 'fa-solid fa-paint-roller'
-                            : 'fa-solid fa-faucet',
-            category: job.category.toUpperCase(),
-            status: 'AWAITING BIDS',
-            title: job.title,
-            dateStr: job.dateStr,
-            location: job.location,
-            priceLabel: 'EST. BUDGET',
-            priceValue: Number(job.budget) || 0,
-            minBudget: Number(job.budget) || 0,
-            maxBudget: Number(job.budget) || 0,
-            bidNo: 0,
+function getJobIdFromHash() {
+    const match = getHashPath().match(/^job-details\/([^/]+)$/);
+    if (!match) return null;
+    try { return decodeURIComponent(match[1]); } catch { return match[1]; }
+}
+
+function navigateTo(route) {
+    const url = window.location.pathname + window.location.search + '#' + route;
+    window.history.pushState(window.history.state, '', url);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+function CustomerWorkspace({ user, onLogout }) {
+    const [activePage, setActivePage] = useState(getPageFromHash);
+    const [jobs, setJobs] = useState([]);
+    const [jobsLoading, setJobsLoading] = useState(true);
+    const [jobsError, setJobsError] = useState('');
+    const [jobsReloadKey, setJobsReloadKey] = useState(0);
+    const [detailLoading, setDetailLoading] = useState(() => Boolean(getJobIdFromHash()));
+    const [detailError, setDetailError] = useState('');
+    const [selectedJobId, setSelectedJobId] = useState(getJobIdFromHash);
+    const [selectedJob, setSelectedJob] = useState(null);
+    const [myJobsViewState, setMyJobsViewState] = useState({ search: '', statusFilter: 'ALL', categoryFilter: 'ALL', sortBy: 'recent' });
+    const hasSyncedInitialRoute = useRef(false);
+    const sidebarRef = useRef(null);
+    const menuButtonRef = useRef(null);
+    const [menuOpen, setMenuOpen] = useState(false);
+
+    useEffect(() => {
+        if (!menuOpen) return undefined;
+        const sidebar = sidebarRef.current;
+        const menuButton = menuButtonRef.current;
+        const focusable = sidebar?.querySelectorAll('a[href], button:not([disabled])');
+        focusable?.[0]?.focus();
+        function trapFocus(event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setMenuOpen(false);
+                menuButton?.focus();
+                return;
+            }
+            if (event.key !== 'Tab' || !focusable?.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+        document.addEventListener('keydown', trapFocus);
+        return () => {
+            document.removeEventListener('keydown', trapFocus);
+            if (sidebar?.contains(document.activeElement)) menuButton?.focus();
         };
+    }, [menuOpen]);
 
-        setJobs((current) => [newJob, ...current]);
-        setSelectedJob(newJob);
-        setActivePage('myJobs');
+    useEffect(() => {
+        if (user?.isDemo) {
+            let active = true;
+            Promise.resolve().then(() => {
+                if (!active) return;
+                setJobs(demoCustomerJobs);
+                setJobsError('');
+                setJobsLoading(false);
+            });
+            return () => { active = false; };
+        }
+        const controller = new AbortController();
+        customerApi.listJobs({ limit: 50 }, { signal: controller.signal })
+            .then((response) => {
+                if (controller.signal.aborted) return;
+                setJobs(extractJobList(response));
+                setJobsError('');
+            })
+            .catch((error) => {
+                if (controller.signal.aborted) return;
+                setJobs([]);
+                setJobsError(jobErrorMessage(error));
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setJobsLoading(false);
+            });
+        return () => controller.abort();
+    }, [user?.id, user?.isDemo, jobsReloadKey]);
+
+    useEffect(() => {
+        const syncPageWithHash = () => {
+            const nextPage = getPageFromHash();
+            const nextJobId = getJobIdFromHash();
+            setActivePage(nextPage);
+            setSelectedJobId(nextJobId);
+            if (nextPage === 'jobDetails' && nextJobId) { setDetailLoading(true); setDetailError(''); }
+        };
+        window.addEventListener('popstate', syncPageWithHash);
+        window.addEventListener('hashchange', syncPageWithHash);
+        return () => {
+            window.removeEventListener('popstate', syncPageWithHash);
+            window.removeEventListener('hashchange', syncPageWithHash);
+        };
+    }, []);
+
+    useEffect(() => {
+        const nextHash = activePage === 'jobDetails'
+            ? '#job-details' + (selectedJobId ? '/' + encodeURIComponent(selectedJobId) : '')
+            : '#' + PAGE_HASHES[activePage];
+        if (window.location.hash === nextHash) {
+            hasSyncedInitialRoute.current = true;
+            return;
+        }
+        const nextUrl = window.location.pathname + window.location.search + nextHash;
+        if (hasSyncedInitialRoute.current) window.history.pushState(window.history.state, '', nextUrl);
+        else {
+            window.history.replaceState(window.history.state, '', nextUrl);
+            hasSyncedInitialRoute.current = true;
+        }
+    }, [activePage, selectedJobId, jobs, user?.isDemo]);
+
+    useEffect(() => {
+        if (!user?.isDemo || activePage !== 'jobDetails' || !selectedJobId) return undefined;
+        let active = true;
+        Promise.resolve().then(() => {
+            if (!active) return;
+            const demoJob = jobs.find((job) => job.id === String(selectedJobId));
+            setSelectedJob(demoJob || null);
+            setDetailError(demoJob ? '' : 'This demo job could not be found.');
+            setDetailLoading(false);
+        });
+        return () => { active = false; };
+    }, [activePage, selectedJobId, jobs, user?.isDemo]);
+
+    useEffect(() => {
+        if (user?.isDemo || activePage !== 'jobDetails' || !selectedJobId) return undefined;
+        const controller = new AbortController();
+        customerApi.getJob(selectedJobId, { signal: controller.signal })
+            .then((response) => {
+                if (controller.signal.aborted) return;
+                const job = extractJob(response);
+                if (!job?.id) throw new Error('The server did not return a valid job record.');
+                setSelectedJob(job);
+                setSelectedJobId(job.id);
+            })
+            .catch((error) => {
+                if (controller.signal.aborted) return;
+                setSelectedJob(null);
+                setDetailError(jobErrorMessage(error, 'We could not load this job. Please try again.'));
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setDetailLoading(false);
+            });
+        return () => controller.abort();
+    }, [activePage, selectedJobId, user?.isDemo]);
+
+    const navigate = (page, job = null) => {
+        const nextPage = PAGE_HASHES[page] ? page : 'home';
+        if (job?.id) {
+            setSelectedJob(job);
+            setSelectedJobId(String(job.id));
+        } else if (nextPage === 'jobDetails') {
+            setSelectedJob(null);
+            setSelectedJobId(null);
+            setDetailError('No job was selected. Return to My Jobs and choose a request.');
+            setDetailLoading(false);
+        } else {
+            setSelectedJobId(null);
+        }
+        if (nextPage === 'jobDetails' && job?.id) {
+            setDetailLoading(true);
+            setDetailError('');
+        }
+        setActivePage(nextPage);
+        setMenuOpen(false);
     };
 
-    const selectedJobFromState = jobs.find((job) => job.id === selectedJob?.id) || selectedJob;
+    const handleCancelJob = async () => {
+        if (!selectedJobId) throw new Error('The selected job could not be identified.');
+        const response = await customerApi.cancelJob(selectedJobId);
+        const cancelledJob = extractJob(response);
+        if (!cancelledJob?.id || cancelledJob.status !== 'CANCELLED') {
+            throw new Error('The server did not confirm that this job was cancelled.');
+        }
+        setJobs((current) => current.some((job) => job.id === cancelledJob.id)
+            ? current.map((job) => job.id === cancelledJob.id ? cancelledJob : job)
+            : [cancelledJob, ...current]);
+        setSelectedJob(cancelledJob);
+        navigate('myJobs');
+    };
+
+    const handleJobPosted = async (draft) => {
+        const response = await customerApi.createJob({
+            title: draft.title,
+            category: draft.category,
+            description: draft.description,
+            urgency: draft.urgency,
+            preferredDate: draft.date || null,
+            preferredTime: draft.time || null,
+            serviceLocation: draft.location,
+            budget: Number(draft.budget),
+        });
+        const createdJob = extractJob(response);
+        if (!createdJob?.id) throw new Error('The server did not return the saved job. Please refresh My Jobs before trying again.');
+        setJobs((current) => [createdJob, ...current.filter((job) => job.id !== createdJob.id)]);
+        setJobsError('');
+        setJobsLoading(false);
+        setMyJobsViewState({ search: '', statusFilter: 'ALL', categoryFilter: 'ALL', sortBy: 'recent' });
+        navigate('myJobs');
+    };
+
+    const retryJobDetails = () => {
+        if (!selectedJobId) return;
+        setDetailLoading(true);
+        setDetailError('');
+        customerApi.getJob(selectedJobId)
+            .then((response) => {
+                const job = extractJob(response);
+                if (!job?.id) throw new Error('The server returned an invalid job record.');
+                setSelectedJob(job);
+                setDetailError('');
+            })
+            .catch((error) => setDetailError(jobErrorMessage(error, 'We could not load this job. Please try again.')))
+            .finally(() => setDetailLoading(false));
+    };
+
+    const customerName = user?.name || user?.fullName || user?.email || 'Customer account';
+    const customerInitials = customerName.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'CU';
 
     const renderPage = () => {
         switch (activePage) {
             case 'myJobs':
-                return (
-                    <MyJobs
-                        jobs={jobs}
-                        onPostJob={() => navigate('postJob')}
-                        onViewDetails={(job) => navigate('jobDetails', job)}
-                        onOpenMessages={(job) => navigate('messages', job)}
-                    />
-                );
-            case 'messages':
-                return (
-                    <Messages
-                        selectedJob={selectedJobFromState}
-                        onViewJob={() => navigate('jobDetails', selectedJobFromState)}
-                    />
-                );
+                return <MyJobs jobs={jobs} demoMode={Boolean(user?.isDemo)} loading={jobsLoading} error={jobsError} onRetry={() => { setJobsLoading(true); setJobsError(''); setJobsReloadKey((current) => current + 1); }} viewState={myJobsViewState} onViewStateChange={setMyJobsViewState} onPostJob={() => navigate('postJob')} onViewDetails={(job) => navigate('jobDetails', job)} />;
             case 'postJob':
-                return (
-                    <PostJob
-                        onBack={() => navigate('myJobs')}
-                        onJobPosted={handleJobPosted}
-                    />
-                );
+                return <PostJob onBack={() => navigate('myJobs')} onJobPosted={handleJobPosted} />;
             case 'jobDetails':
-                return (
-                    <JobDetails
-                        job={selectedJobFromState}
-                        onBack={() => navigate('myJobs', selectedJobFromState)}
-                        onPayment={() => navigate('payment', selectedJobFromState)}
-                        onMessages={() => navigate('messages', selectedJobFromState)}
-                        onCancel={() => handleCancelJob(selectedJobFromState)}
-                    />
-                );
+                return <JobDetails job={selectedJob} loading={detailLoading} error={detailError} onRetry={retryJobDetails} onBack={() => navigate('myJobs')} onPayment={() => navigate('payment', selectedJob)} onCancel={handleCancelJob} />;
             case 'payment':
-                return (
-                    <Payment
-                        job={selectedJobFromState}
-                        onBack={() => navigate('jobDetails', selectedJobFromState)}
-                        onPaymentComplete={() => navigate('review', selectedJobFromState)}
-                    />
-                );
+                return <Payment job={selectedJob} onBack={() => navigate('jobDetails', selectedJob)} onPaymentComplete={() => navigate('review', selectedJob)} />;
             case 'review':
-                return (
-                    <Review
-                        job={selectedJobFromState}
-                        onClose={() => navigate('myJobs', selectedJobFromState)}
-                        onSubmit={() => navigate('myJobs', selectedJobFromState)}
-                    />
-                );
+                return <Review job={selectedJob} onClose={() => navigate('myJobs')} onSubmit={() => navigate('myJobs')} />;
             case 'account':
                 return <Account />;
+            case 'notFound':
+                return <section className="page-surface" style={{ padding: '64px 36px' }}><p className="eyebrow">CUSTOMER WORKSPACE</p><h1>Page not found</h1><p>The page you requested does not exist.</p><button type="button" className="dark-button" onClick={() => navigate('home')}>Return home</button></section>;
             case 'home':
             default:
-                return (
-                    <Home
-                        onSelectProvider={(provider) => navigate('jobDetails', {
-                            id: `PROVIDER-${provider.name}`,
-                            title: provider.serviceTitle,
-                            provider: provider.name,
-                            category: provider.category,
-                            price: provider.price,
-                            status: 'IN PROGRESS',
-                            priceValue: provider.price,
-                            progressPercentage: 0,
-                        })}
-                    />
-                );
+                return <Home user={user} isAuthenticated embeddedInWorkspace onNavigate={navigateTo} onAuth={() => {}} onRequireAuth={() => {}} onSelectProvider={(provider) => navigateTo('provider/' + provider.id)} />;
         }
     };
 
     return (
-        <div className="app-shell">
-            <Nav activePage={activePage} onNavigate={navigate} />
-            <div className="app-content">
-                <Suspense fallback={<div className="page-loading" role="status" aria-live="polite">Loading…</div>}>
-                    {renderPage()}
-                </Suspense>
-            </div>
+        <div className="customer-workspace-shell">
+            <Nav activePage={activePage} onNavigate={navigate} user={user} onLogout={onLogout} isOpen={menuOpen} onClose={() => setMenuOpen(false)} sidebarRef={sidebarRef} />
+            <button className={`customer-nav-backdrop${menuOpen ? ' is-visible' : ''}`} type="button" aria-label="Close navigation menu" tabIndex={menuOpen ? 0 : -1} onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }} />
+            <main className="customer-workspace-main">
+                <header className="customer-workspace-topbar">
+                    <div className="customer-topbar-left">
+                        <button ref={menuButtonRef} className="customer-menu-button" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="customer-navigation" onClick={() => setMenuOpen((open) => !open)}>
+                            <i className={`fa-solid ${menuOpen ? 'fa-xmark' : 'fa-bars'}`} aria-hidden="true" />
+                        </button>
+                        <p className="customer-breadcrumb">FixIt <span aria-hidden="true">/</span> {PAGE_LABELS[activePage] || 'Customer workspace'}</p>
+                    </div>
+                    <div className="customer-topbar-actions">
+                        <span className="customer-workspace-tag">CUSTOMER</span>
+                        <button className="customer-topbar-icon" type="button" aria-label="Notifications are not connected" disabled><i className="fa-regular fa-bell" aria-hidden="true" /></button>
+                        <span className="customer-topbar-avatar" aria-label={customerName}>{customerInitials}</span>
+                    </div>
+                </header>
+                <div className="customer-workspace-content">
+                <FixitAsyncBoundary key={activePage}>
+                    <div key={activePage} className="fixit-page-transition">{renderPage()}</div>
+                </FixitAsyncBoundary>
+                </div>
+            </main>
         </div>
     );
 }
 
-export default App;
+function getRouteFromHash() {
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    if (!hash) return 'landing';
+    const route = hash.split('?')[0];
+    return route === 'home' ? 'marketplace' : route;
+}
+
+const protectedRoutes = ['my-jobs', 'post-job', 'job-details', 'payment', 'review', 'account'];
+
+function PublicExperience({ route, user, openAuth, requireAuth }) {
+    const navigate = (nextRoute) => navigateTo(nextRoute);
+    const match = route.match(/^provider\/([^/]+)$/);
+    if (match) return <ProviderProfile provider={providers.find((provider) => provider.id === match[1])} user={user} onNavigate={navigate} onAuth={openAuth} onRequireAuth={requireAuth} />;
+    if (route === 'marketplace') return <Home user={user} isAuthenticated={Boolean(user)} onNavigate={navigate} onAuth={openAuth} onRequireAuth={requireAuth} onSelectProvider={(provider) => navigate('provider/' + provider.id)} />;
+    return <LandingPage user={user} onNavigate={navigate} onAuth={openAuth} />;
+}
+
+function FixitApp({ user, onLogout, openAuth, requireAuth }) {
+    const [route, setRoute] = useState(getRouteFromHash);
+    useEffect(() => {
+        const sync = () => setRoute(getRouteFromHash());
+        window.addEventListener('popstate', sync);
+        window.addEventListener('hashchange', sync);
+        return () => { window.removeEventListener('popstate', sync); window.removeEventListener('hashchange', sync); };
+    }, []);
+    const routeKey = route.split('/')[0];
+    if (user && protectedRoutes.includes(routeKey)) return <CustomerWorkspace key={user.id || user.email || 'customer'} user={user} onLogout={onLogout} />;
+    return <PublicExperience route={route} user={user} openAuth={openAuth} requireAuth={requireAuth} />;
+}
+
+export default function App() {
+    return <AuthGate>{(auth) => <FixitApp {...auth} />}</AuthGate>;
+}

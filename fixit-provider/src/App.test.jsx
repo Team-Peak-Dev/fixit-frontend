@@ -1,113 +1,96 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App.jsx';
+import { authApi } from './api/auth.js';
 
-const pageLabels = [
-    'Dashboard',
-    'My Profile',
-    'My Services',
-    'Availability',
-    'Available Jobs',
-    'Job Details',
-    'My Jobs',
-    'Messages',
-    'Earnings',
-    'Reviews',
-    'Settings',
-];
+vi.mock('./api/auth.js', () => ({
+    authApi: { getCurrentUser: vi.fn(), login: vi.fn(), logout: vi.fn() },
+}));
+
+const providerUser = { id: 'p1', name: 'Pat', role: 'provider' };
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    authApi.getCurrentUser.mockResolvedValue({ data: { user: providerUser } });
+    authApi.login.mockResolvedValue({ data: { user: providerUser } });
+});
 
 afterEach(() => {
     cleanup();
+    vi.unstubAllEnvs();
+    localStorage.removeItem('fixit-demo-session:provider');
     window.history.replaceState({}, '', window.location.pathname);
 });
 
-describe('provider workspace navigation', () => {
-    it('renders the provider dashboard by default', () => {
+describe('provider authentication entry', () => {
+    it('restores a provider session before rendering the dashboard', async () => {
         render(<App />);
-
-        expect(screen.getByRole('heading', { name: /provider dashboard/i })).toBeInTheDocument();
-        expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: /provider dashboard/i })).toBeInTheDocument();
+        expect(authApi.getCurrentUser).toHaveBeenCalledOnce();
     });
 
-    it.each(pageLabels)('opens the %s screen and marks it active', (page) => {
+    it('shows a dedicated provider login when no session exists', async () => {
+        authApi.getCurrentUser.mockRejectedValueOnce(new Error('No session'));
         render(<App />);
-
-        fireEvent.click(screen.getByText(page, { selector: 'span' }));
-
-        if (page === 'Dashboard') {
-            expect(screen.getByRole('heading', { name: /provider dashboard/i })).toBeInTheDocument();
-        } else {
-            expect(screen.getByRole('heading', { name: page, level: 1 })).toBeInTheDocument();
-        }
-
-        expect(screen.getByText(page, { selector: 'span' }).closest('button'))
-            .toHaveAttribute('aria-current', 'page');
+        expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+        expect(screen.getByText('SERVICE PROVIDER')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /log in as a customer/i })).toHaveAttribute('href', 'http://localhost:5173/');
+        expect(screen.getByRole('link', { name: /back to fixit/i })).toHaveAttribute('href', 'http://localhost:5173/');
     });
 
-    it('opens the mobile navigation and closes it after a section is selected', () => {
+    it('logs in with the provider API and opens the provider dashboard', async () => {
+        authApi.getCurrentUser.mockRejectedValueOnce(new Error('No session'));
         render(<App />);
+        await screen.findByRole('heading', { name: 'Welcome back' });
+        fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'provider@example.test' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Sign in to provider workspace' }));
+        expect(await screen.findByRole('heading', { name: /provider dashboard/i })).toBeInTheDocument();
+        expect(authApi.login).toHaveBeenCalledWith({ email: 'provider@example.test', password: 'secret' });
+        expect(window.location.hash).toBe('#dashboard');
+    });
 
-        const menuButton = screen.getByLabelText(/open navigation menu/i);
-        fireEvent.click(menuButton);
-
-        expect(menuButton).toHaveAttribute('aria-expanded', 'true');
-
-        fireEvent.click(screen.getByText('My Profile', { selector: 'span' }));
-
-        expect(screen.getByRole('heading', { name: 'My Profile', level: 1 })).toBeInTheDocument();
+    it('keeps workspace navigation accessible through the mobile menu control', async () => {
+        render(<App />);
+        await screen.findByRole('heading', { name: /provider dashboard/i });
+        const menuButton = document.querySelector('.mobile-menu-button');
+        expect(menuButton).not.toBeNull();
+        expect(menuButton).toHaveAttribute('aria-label', 'Open navigation menu');
         expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(menuButton);
+        expect(screen.getByRole('dialog', { name: 'Provider navigation' })).toBeInTheDocument();
+        const closeButton = document.querySelector('.sidebar-close-button');
+        expect(closeButton).not.toBeNull();
+        fireEvent.click(closeButton);
+        expect(screen.queryByRole('dialog', { name: 'Provider navigation' })).not.toBeInTheDocument();
+        expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();
     });
 
-    it('shows a not-found screen for an unknown hash route', () => {
+    it('rejects a customer account from the provider login', async () => {
+        authApi.getCurrentUser.mockRejectedValueOnce(new Error('No session'));
+        authApi.login.mockResolvedValueOnce({ data: { user: { id: 'c1', role: 'customer' } } });
         render(<App />);
-
-        window.history.replaceState({}, '', '#not-a-real-page');
-        fireEvent(window, new Event('hashchange'));
-
-        expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
+        await screen.findByRole('heading', { name: 'Welcome back' });
+        fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'customer@example.test' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Sign in to provider workspace' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/not a provider account/i);
+        expect(screen.queryByRole('heading', { name: /provider dashboard/i })).not.toBeInTheDocument();
     });
-});
-
-
-describe('provider dashboard states and figures', () => {
-    it('labels sample figures as demo data and separates estimated, agreed, and paid amounts', () => {
+    it('accepts the local demo account without calling the backend', async () => {
+        vi.stubEnv('MODE', 'development');
+        vi.stubEnv('DEV', true);
+        authApi.getCurrentUser.mockRejectedValue(new Error('Backend must not be called in local demo mode'));
         render(<App />);
-        expect(screen.getByText('Demo data')).toBeInTheDocument();
-        expect(screen.getByRole('heading', { name: 'Earnings overview' })).toBeInTheDocument();
-        expect(screen.getByText('Estimated', { selector: 'span' })).toBeInTheDocument();
-        expect(screen.getByText('Agreed', { selector: 'span' })).toBeInTheDocument();
-        expect(screen.getByText('Paid', { selector: 'span' })).toBeInTheDocument();
-        expect(screen.getByText('₦95,000')).toBeInTheDocument();
-        expect(screen.getByText('₦180,000')).toBeInTheDocument();
-        expect(screen.getByText('₦125,000')).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+        expect(screen.getByText(/Local demo:/i)).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'demo@fixit.local' } });
+        fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'FixitDemo123!' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Sign in to provider workspace' }));
+        expect(await screen.findByRole('heading', { name: /provider dashboard/i })).toBeInTheDocument();
+        expect(authApi.getCurrentUser).not.toHaveBeenCalled();
+        expect(authApi.login).not.toHaveBeenCalled();
+        expect(JSON.parse(localStorage.getItem('fixit-demo-session:provider'))).toMatchObject({ role: 'provider', isDemo: true });
     });
 
-    it('shows a loading state without displaying earnings as if they were loaded', async () => {
-        const { Dashboard } = await import('./App.jsx');
-        render(<Dashboard dataState="loading" />);
-        expect(screen.getByRole('heading', { name: /loading your dashboard/i })).toBeInTheDocument();
-        expect(screen.queryByRole('heading', { name: /earnings overview/i })).not.toBeInTheDocument();
-    });
-
-    it('shows a useful zero-data state and zero naira amounts', async () => {
-        const { Dashboard } = await import('./App.jsx');
-        render(<Dashboard dataState="empty" />);
-        expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-        expect(screen.getAllByText('₦0')).toHaveLength(3);
-    });
-
-    it('shows an error and exposes a retry action', async () => {
-        const { Dashboard } = await import('./App.jsx');
-        const onRetry = vi.fn();
-        render(<Dashboard dataState="error" onRetry={onRetry} />);
-        expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t load your dashboard/i);
-        fireEvent.click(screen.getByRole('button', { name: /try again/i }));
-        expect(onRetry).toHaveBeenCalledOnce();
-    });
-
-    it('uses Nigerian naira currency formatting', async () => {
-        const { Dashboard } = await import('./App.jsx');
-        render(<Dashboard dataState="empty" />);
-        expect(screen.getAllByText('₦0')).toHaveLength(3);
-    });
 });

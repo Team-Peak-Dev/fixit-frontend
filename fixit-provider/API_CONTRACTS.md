@@ -129,6 +129,8 @@ Agree on whether the API uses this wrapper or direct resource objects before wri
 
 ## Authentication and browser security
 
+The provider frontend uses the proposed shared endpoints `POST /auth/login`, `GET /auth/me`, and `POST /auth/logout`. The login/session response must include the authenticated account's canonical `role` (`provider` or `service_provider` for provider accounts). The provider app rejects an explicitly non-provider role in the login response. The backend must still enforce provider authorization on every protected API route.
+
 The backend owner must explicitly choose the authentication model before implementation.
 
 - If using an HttpOnly cookie session, the client will normally need `credentials: "include"`, a precise CORS allowlist, and appropriate CSRF protection for state-changing requests.
@@ -162,4 +164,4 @@ Before integration starts, record decisions for:
 - [ ] Rate limits, retry behavior, and idempotency for mutations
 - [ ] Contract tests or a staging environment with representative responses
 
-The UI phase is not server integration. Implement the API layer only after these decisions are confirmed.
+The frontend has now implemented transport, authentication-call scaffolding, and provider resource-call scaffolding against this proposed route map. No backend repository or deployed API currently exists, so these calls are not live integrations. The future backend implementation must either honor this proposal or update this document and the root README before the UI is connected. Confirm the remaining decisions above before treating any route or payload as production contract.

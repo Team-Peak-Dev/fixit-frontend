@@ -35,7 +35,7 @@ export default function JobsPage() {
 
     const pageCount = Math.max(1, Math.ceil(filteredJobs.length / pageSize));
     const visibleJobs = filteredJobs.slice((page - 1) * pageSize, page * pageSize);
-    const selectedJob = demoJobs.find((job) => job.id === selectedId) ?? null;
+    const selectedJob = filteredJobs.find((job) => job.id === selectedId) ?? null;
     const counts = jobStatuses.reduce((result, item) => {
         result[item.value] = demoJobs.filter((job) => job.status === item.value).length;
         return result;
@@ -55,7 +55,7 @@ export default function JobsPage() {
     return (
         <div className="jobs-page">
             <div className="demo-notice" role="note">
-                <span className="demo-notice-icon" aria-hidden="true">i</span>
+                <span className="demo-notice-icon" aria-hidden="true"><i className="fa-solid fa-circle-info" /></span>
                 <p><strong>Jobs demo</strong> All job, customer, provider, amount, and activity details are illustrative sample records, not live marketplace data. This workspace is read-only.</p>
             </div>
 
@@ -83,7 +83,7 @@ export default function JobsPage() {
                 </div>
                 <div className="jobs-filters">
                     <label className="provider-search">
-                        <span aria-hidden="true">⌕</span>
+                        <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
                         <input type="search" aria-label="Search jobs" placeholder="Search job, customer, provider, or location" value={search} onChange={(event) => updateSearch(event.target.value)} />
                     </label>
                     <label className="filter-control">

@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
+import { FixitAsyncBoundary } from './FixitAsyncBoundary.jsx';
+import { createDemoUser, isDemoAuthEnabled, isDemoCredentials, readDemoSession, writeDemoSession, clearDemoSession } from '../../shared/demo-auth.js';
+import './DemoAuth.css';
+
+import DashboardPage from './DashboardPage.jsx';
 import ProvidersPage from './ProvidersPage.jsx';
 import CustomersPage from './CustomersPage.jsx';
 import VerificationPage from './VerificationPage.jsx';
@@ -10,55 +15,37 @@ import AnalyticsPage from './AnalyticsPage.jsx';
 import SettingsPage from './SettingsPage.jsx';
 
 const navigation = [
-    { label: 'Dashboard', icon: '▦', group: 'Overview' },
-    { label: 'Customers', icon: '♙', group: 'People' },
-    { label: 'Providers', icon: '♧', group: 'People' },
-    { label: 'Verification', icon: '✓', group: 'People' },
-    { label: 'Jobs', icon: '▤', group: 'Operations' },
-    { label: 'Disputes & support', icon: '◌', group: 'Operations' },
-    { label: 'Categories', icon: '◇', group: 'Operations' },
-    { label: 'Analytics', icon: '▥', group: 'Insights' },
-    { label: 'Settings', icon: '⚙', group: 'System' },
+    { label: 'Dashboard', icon: 'fa-solid fa-gauge-high', group: 'Overview' },
+    { label: 'Customers', icon: 'fa-solid fa-users', group: 'People' },
+    { label: 'Providers', icon: 'fa-solid fa-user-tie', group: 'People' },
+    { label: 'Verification', icon: 'fa-solid fa-user-shield', group: 'People' },
+    { label: 'Jobs', icon: 'fa-solid fa-briefcase', group: 'Operations' },
+    { label: 'Disputes & support', icon: 'fa-solid fa-life-ring', group: 'Operations' },
+    { label: 'Categories', icon: 'fa-solid fa-layer-group', group: 'Operations' },
+    { label: 'Analytics', icon: 'fa-solid fa-chart-line', group: 'Insights' },
+    { label: 'Settings', icon: 'fa-solid fa-gear', group: 'System' },
 ];
-
-const demoMetrics = [
-    { label: 'Total customers', value: '1,284', change: '+8.2%', note: 'vs. previous month', tone: 'positive', icon: '♙' },
-    { label: 'Registered providers', value: '342', change: '+5.4%', note: 'vs. previous month', tone: 'positive', icon: '♧' },
-    { label: 'Jobs on platform', value: '856', change: '+12.6%', note: 'vs. previous month', tone: 'positive', icon: '▤' },
-    { label: 'Pending verification', value: '4', change: 'Needs review', note: 'Sample queue records', tone: 'attention', icon: '✓' },
-];
-
-const demoActivity = [
-    { id: 'FX-2048', title: 'Kitchen plumbing repair', customer: 'Ada N.', provider: 'Provider sample 014', status: 'In progress', amount: 28000, date: 'Today, 09:42' },
-    { id: 'FX-2047', title: 'Electrical inspection', customer: 'Chidi O.', provider: 'Provider sample 031', status: 'Awaiting bids', amount: 0, date: 'Today, 08:16' },
-    { id: 'FX-2046', title: 'Two-bedroom deep cleaning', customer: 'Mariam A.', provider: 'Provider sample 008', status: 'Completed', amount: 45000, date: 'Yesterday' },
-    { id: 'FX-2045', title: 'Water heater installation', customer: 'Tunde K.', provider: 'Not assigned', status: 'Disputed', amount: 65000, date: 'Yesterday' },
-];
-
-const formatNaira = (amount) => new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency: 'NGN',
-    maximumFractionDigits: 0,
-}).format(amount);
 
 function Brand() {
     return (
         <a className="admin-brand" href="#dashboard" aria-label="FixIt admin dashboard">
-            <span className="brand-mark" aria-hidden="true">F</span>
+            <img className="brand-logo" src="/brand/logo.png" alt="" />
             <span className="brand-copy">
                 <strong>FixIt</strong>
                 <span>ADMINISTRATION</span>
+                <span className="brand-tagline">Trusted help for every home.</span>
             </span>
         </a>
     );
 }
 
-function Sidebar({ activePage, onNavigate, isOpen }) {
+function Sidebar({ activePage, onNavigate, isOpen, sidebarRef, onClose, onLogout, isDemoUser }) {
     const groups = [...new Set(navigation.map((item) => item.group))];
 
     return (
-        <aside className={`admin-sidebar${isOpen ? ' is-open' : ''}`} id="admin-navigation" aria-label="Admin navigation">
+        <aside ref={sidebarRef} className={`admin-sidebar${isOpen ? ' is-open' : ''}`} id="admin-navigation" aria-label="Admin navigation" role={isOpen ? "dialog" : undefined} aria-modal={isOpen ? true : undefined}>
             <Brand />
+            <button className="sidebar-close-button" type="button" onClick={onClose}>Close navigation</button>
             <nav className="admin-nav" aria-label="Main navigation">
                 {groups.map((group) => (
                     <div className="nav-group" key={group}>
@@ -71,7 +58,7 @@ function Sidebar({ activePage, onNavigate, isOpen }) {
                                 aria-current={activePage === item.label ? 'page' : undefined}
                                 onClick={() => onNavigate(item.label)}
                             >
-                                <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                                <span className="nav-icon" aria-hidden="true"><i className={item.icon} aria-hidden="true" /></span>
                                 <span>{item.label}</span>
                                 {item.label === 'Verification' && <span className="nav-count">4</span>}
                             </button>
@@ -85,91 +72,9 @@ function Sidebar({ activePage, onNavigate, isOpen }) {
                     <span><strong>Admin workspace</strong><small>Demo account</small></span>
                 </div>
                 <p>FixIt operations console</p>
+                {isDemoUser && <button className="admin-demo-logout" type="button" onClick={onLogout}><i className="fa-solid fa-arrow-right-from-bracket" aria-hidden="true" /> Log out</button>}
             </div>
         </aside>
-    );
-}
-
-function StatusBadge({ status }) {
-    const className = status === 'Completed' ? 'status-success'
-        : status === 'Disputed' ? 'status-danger'
-            : status === 'In progress' ? 'status-info' : 'status-warning';
-
-    return <span className={`status-badge ${className}`}>{status}</span>;
-}
-
-function Dashboard({ onNavigate }) {
-    return (
-        <>
-            <div className="demo-notice" role="note">
-                <span className="demo-notice-icon" aria-hidden="true">i</span>
-                <p><strong>Demo environment</strong> These are illustrative sample figures and records, not live FixIt platform data.</p>
-            </div>
-            <section className="page-heading">
-                <div>
-                    <p className="eyebrow">Operations overview</p>
-                    <h1>Platform overview</h1>
-                    <p className="page-description">A snapshot of activity across the FixIt marketplace.</p>
-                </div>
-                <span className="date-label">Sample reporting period · November 2026</span>
-            </section>
-            <section className="metrics-grid" aria-label="Platform metrics">
-                {demoMetrics.map((metric) => (
-                    <article className="metric-card" key={metric.label}>
-                        <div className="metric-topline">
-                            <span className="metric-icon" aria-hidden="true">{metric.icon}</span>
-                            <span className={`metric-change ${metric.tone}`}>{metric.change}</span>
-                        </div>
-                        <p className="metric-label">{metric.label}</p>
-                        <strong className="metric-value">{metric.value}</strong>
-                        <p className="metric-note">{metric.note}</p>
-                    </article>
-                ))}
-            </section>
-            <section className="overview-grid">
-                <article className="panel activity-panel">
-                    <div className="panel-header">
-                        <div><h2>Recent job activity</h2><p>Sample marketplace records for interface preview.</p></div>
-                        <button className="text-button" type="button" onClick={() => onNavigate('Jobs')}>View jobs <span aria-hidden="true">↗</span></button>
-                    </div>
-                    <div className="table-wrap">
-                        <table className="activity-table">
-                            <thead><tr><th scope="col">Job</th><th scope="col">Customer / Provider</th><th scope="col">Status</th><th scope="col">Amount</th><th scope="col">Created</th></tr></thead>
-                            <tbody>
-                                {demoActivity.map((job) => (
-                                    <tr key={job.id}>
-                                        <td><strong>{job.title}</strong><small>{job.id}</small></td>
-                                        <td><span>{job.customer}</span><small>{job.provider}</small></td>
-                                        <td><StatusBadge status={job.status} /></td>
-                                        <td className="amount-cell">{job.amount ? formatNaira(job.amount) : 'Not set'}</td>
-                                        <td className="date-cell">{job.date}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </article>
-                <aside className="panel attention-panel" aria-labelledby="attention-heading">
-                    <div className="panel-header"><div><h2 id="attention-heading">Needs attention</h2><p>Items an admin may need to review.</p></div></div>
-                    <button className="attention-item" type="button" onClick={() => onNavigate('Verification')}>
-                        <span className="attention-icon warning" aria-hidden="true">✓</span>
-                        <span className="attention-copy"><strong>Provider verification</strong><small>Applications awaiting review</small></span>
-                        <strong className="attention-number">4</strong>
-                    </button>
-                    <button className="attention-item" type="button" onClick={() => onNavigate('Disputes & support')}>
-                        <span className="attention-icon danger" aria-hidden="true">!</span>
-                        <span className="attention-copy"><strong>Open disputes</strong><small>Require investigation</small></span>
-                        <strong className="attention-number">7</strong>
-                    </button>
-                    <button className="attention-item" type="button" onClick={() => onNavigate('Jobs')}>
-                        <span className="attention-icon neutral" aria-hidden="true">▤</span>
-                        <span className="attention-copy"><strong>Unassigned jobs</strong><small>Awaiting provider response</small></span>
-                        <strong className="attention-number">23</strong>
-                    </button>
-                    <div className="attention-footnote">Sample counts only. No live queues are connected.</div>
-                </aside>
-            </section>
-        </>
     );
 }
 
@@ -198,17 +103,85 @@ function resolvePage(hash) {
     return navigation.find((item) => item.label.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug)?.label ?? 'Not found';
 }
 
+function DemoAdminLogin({ onLogin }) {
+    const [email, setEmail] = useState('demo@fixit.local');
+    const [password, setPassword] = useState('FixitDemo123!');
+    const [error, setError] = useState('');
+    function submit(event) {
+        event.preventDefault();
+        if (!isDemoCredentials(email, password)) {
+            setError('The demo email or password is incorrect.');
+            return;
+        }
+        onLogin();
+    }
+    return (
+        <main className="admin-demo-auth-page">
+            <section className="admin-demo-auth-card" aria-labelledby="admin-demo-title">
+                <a className="admin-demo-brand" href="#dashboard"><img src="/brand/logo.png" alt="" /><span><strong>FixIt</strong><small>Admin workspace</small></span></a>
+                <p className="eyebrow">LOCAL DEMO ACCESS</p>
+                <h1 id="admin-demo-title">Welcome back</h1>
+                <p className="admin-demo-description">Sign in to explore the FixIt administration workspace.</p>
+                {error && <p className="admin-demo-error" role="alert">{error}</p>}
+                <form onSubmit={submit}>
+                    <label htmlFor="admin-demo-email">Email address</label>
+                    <input id="admin-demo-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
+                    <label htmlFor="admin-demo-password">Password</label>
+                    <input id="admin-demo-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+                    <button className="admin-demo-submit" type="submit">Sign in to admin workspace</button>
+                </form>
+                <p className="admin-demo-hint">Demo account: <strong>demo@fixit.local</strong><br />Password: <strong>FixitDemo123!</strong></p>
+                <p className="admin-demo-warning">Local development only. Demo access does not authenticate with the backend.</p>
+            </section>
+        </main>
+    );
+}
+
 function App() {
+    const demoAuthEnabled = isDemoAuthEnabled();
+    const [demoUser, setDemoUser] = useState(() => demoAuthEnabled ? readDemoSession('admin') : null);
+    const [demoStatus, setDemoStatus] = useState(() => {
+        if (!demoAuthEnabled) return 'ready';
+        return readDemoSession('admin') ? 'ready' : 'login';
+    });
     const [activePage, setActivePage] = useState(() => resolvePage(window.location.hash));
+    function handleDemoLogin() {
+        const user = createDemoUser('admin');
+        writeDemoSession(user);
+        setDemoUser(user);
+        setDemoStatus('ready');
+    }
+    function handleDemoLogout() {
+        clearDemoSession('admin');
+        setDemoUser(null);
+        setDemoStatus('login');
+    }
     const [menuOpen, setMenuOpen] = useState(false);
+    const sidebarRef = useRef(null);
+    const menuButtonRef = useRef(null);
 
     useEffect(() => {
         if (!menuOpen) return undefined;
-        function handleKeyDown(event) {
-            if (event.key === 'Escape') setMenuOpen(false);
+        const focusable = sidebarRef.current?.querySelectorAll('a[href], button:not([disabled])');
+        focusable?.[0]?.focus();
+        function trapFocus(event) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setMenuOpen(false);
+                menuButtonRef.current?.focus();
+                return;
+            }
+            if (event.key !== 'Tab' || !focusable?.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        document.addEventListener('keydown', trapFocus);
+        return () => {
+            document.removeEventListener('keydown', trapFocus);
+            if (sidebarRef.current?.contains(document.activeElement)) menuButtonRef.current?.focus();
+        };
     }, [menuOpen]);
 
     useEffect(() => {
@@ -220,6 +193,9 @@ function App() {
         return () => window.removeEventListener('hashchange', handleHashChange);
     }, []);
 
+    if (demoStatus === 'checking') return <main className="admin-demo-loading" role="status">Preparing admin workspace…</main>;
+    if (demoStatus === 'login') return <DemoAdminLogin onLogin={handleDemoLogin} />;
+
     function navigateTo(page) {
         setActivePage(page);
         window.location.hash = page.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -228,38 +204,41 @@ function App() {
 
     return (
         <div className="admin-app">
-            <Sidebar activePage={activePage} onNavigate={navigateTo} isOpen={menuOpen} />
+            <Sidebar activePage={activePage} onNavigate={navigateTo} isOpen={menuOpen} sidebarRef={sidebarRef} onClose={() => setMenuOpen(false)} onLogout={handleDemoLogout} isDemoUser={Boolean(demoUser)} />
             <button
                 className={`mobile-backdrop${menuOpen ? ' is-visible' : ''}`}
                 type="button"
                 aria-label="Close navigation menu"
                 tabIndex={menuOpen ? 0 : -1}
-                onClick={() => setMenuOpen(false)}
+                onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}
             />
             <main className="admin-main">
                 <header className="admin-topbar">
                     <div className="topbar-left">
                         <button
-                            className="icon-button mobile-menu-button"
+                            ref={menuButtonRef} className="icon-button mobile-menu-button"
                             type="button"
                             aria-label="Open navigation menu"
                             aria-expanded={menuOpen}
                             aria-controls="admin-navigation"
                             onClick={() => setMenuOpen((open) => !open)}
                         >
-                            <span aria-hidden="true">{menuOpen ? '×' : '☰'}</span>
+                            <span aria-hidden="true">{menuOpen ? <i className="fa-solid fa-xmark" aria-hidden="true" /> : <i className="fa-solid fa-bars" aria-hidden="true" />}</span>
                         </button>
                         <span className="breadcrumb">FixIt <span aria-hidden="true">/</span> {activePage}</span>
                     </div>
                     <div className="topbar-right">
                         <span className="environment-tag">DEMO</span>
-                        <button className="icon-button notification-button" type="button" aria-label="Notifications are not connected" disabled>♧</button>
+                        <button className="icon-button notification-button" type="button" aria-label="Notifications are not connected" disabled><i className="fa-regular fa-bell" aria-hidden="true" /></button>
                         <span className="topbar-avatar" aria-label="Demo administrator">AD</span>
                     </div>
                 </header>
                 <div className="admin-content">
-                    {activePage === 'Dashboard'
-                        ? <Dashboard onNavigate={navigateTo} />
+                    <FixitAsyncBoundary key={activePage}>
+                    
+                        <div key={activePage} className="fixit-page-transition">
+                            {activePage === 'Dashboard'
+                        ? <DashboardPage onNavigate={navigateTo} />
                         : activePage === 'Providers'
                             ? <ProvidersPage />
                             : activePage === 'Customers'
@@ -277,6 +256,9 @@ function App() {
                                                     : activePage === 'Settings'
                                                         ? <SettingsPage />
                                                         : <PlaceholderPage page={activePage} />}
+                        </div>
+                    
+                    </FixitAsyncBoundary>
                 </div>
             </main>
         </div>
